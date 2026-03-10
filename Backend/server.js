@@ -1,25 +1,32 @@
-require("dotenv").config()
-const app = require("./src/app")
-const connectToDB = require("./src/config/database")
+require("dotenv").config();
+const app = require("./src/app");
+const connectToDB = require("./src/config/database");
 
-// connectToDB()
+let isDbConnected = false;
+let dbConnectPromise = null;
 
+async function ensureDbConnection() {
+    if (isDbConnected) return;
+    if (!dbConnectPromise) {
+        dbConnectPromise = connectToDB().then(() => {
+            isDbConnected = true;
+        });
+    }
+    return dbConnectPromise;
+}
 
-// app.listen(3000, () => {
-//     console.log("Server is running on port 3000")
-// })
-const startServer = async () => {
+/**
+ * Vercel Serverless Function handler.
+ * This is the entrypoint Vercel invokes for each request.
+ */
+module.exports = async (req, res) => {
     try {
-        await connectToDB();
-        if (process.env.NODE_ENV !== "production") {
-            app.listen(process.env.PORT, () => {
-                console.log("Server started on port:", process.env.PORT);
-            });
-        }
+        await ensureDbConnection();
+        return app(req, res);
     } catch (error) {
-        console.error("Error starting server:", error);
-        process.exit(1); // Exit the process with a failure code
+        console.error("Unhandled error in serverless handler:", error);
+        if (!res.headersSent) {
+            res.status(500).json({ message: "Internal Server Error" });
+        }
     }
 };
-
-startServer();
